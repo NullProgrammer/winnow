@@ -71,6 +71,30 @@ class TestSuppression:
             src = f'host := "{ip}"\n'
             assert Entity.IP not in entities(detect(src, "main.go")), ip
 
+    def test_documentation_ip_ranges_suppressed(self):
+        # RFC 5737 and RFC 2544 ranges exist so docs and tests have addresses
+        # that route nowhere. Flagging them would flag every good example.
+        for ip in ("192.0.2.1", "198.51.100.7", "203.0.113.45", "198.18.0.1"):
+            src = f'host := "{ip}"\n'
+            assert Entity.IP not in entities(detect(src, "main.go")), ip
+
+    def test_license_header_orgs_are_not_names(self):
+        # Found by scanning the Go source tree: 10,505 NAME hits, every one
+        # "The Go Authors" from a copyright header.
+        for org in (
+            "// Copyright 2009 The Go Authors. All rights reserved.",
+            "// Copyright 2016 The Kubernetes Authors",
+            "// Copyright (c) 2020 Google Inc",
+            "// Copyright 2018 The Apache Software Foundation",
+            "// Copyright 2021 Acme Technologies",
+            "// Author: The Prometheus Team",
+        ):
+            assert Entity.NAME not in entities(detect(org + "\n", "main.go")), org
+
+    def test_real_person_in_copyright_still_found(self):
+        src = "// Copyright (c) 2024 Jane Roe\n"
+        assert "Jane Roe" in values(detect(src, "main.go"), Entity.NAME)
+
     def test_version_string_is_not_an_ip(self):
         src = 'const Version = "1.24.3.1"\n'
         assert Entity.IP not in entities(detect(src, "main.go"))
@@ -113,8 +137,8 @@ class TestOtherEntities:
         assert "jane.doe@acmecorp.io" in values(detect(src, "main.go"), Entity.EMAIL)
 
     def test_public_ip(self):
-        src = 'upstream := "203.0.113.45:8080"\n'
-        assert "203.0.113.45" in values(detect(src, "main.go"), Entity.IP)
+        src = 'upstream := "93.184.216.34:8080"\n'
+        assert "93.184.216.34" in values(detect(src, "main.go"), Entity.IP)
 
     def test_dsn_splits_user_and_password(self):
         src = 'dsn := "postgres://svc_reader:Xk92LmQp4Zt@db.internal:5432/offers"\n'
@@ -166,7 +190,7 @@ class TestMasking:
             (Entity.KEY, FAKE_GH),
             (Entity.PASSWORD, "Xk92LmQp4Zt"),
             (Entity.EMAIL, "jane.doe@acmecorp.io"),
-            (Entity.IP, "203.0.113.45"),
+            (Entity.IP, "93.184.216.34"),
             (Entity.NAME, "Firstname Lastname"),
             (Entity.USERNAME, "svc_reader"),
         ]
@@ -182,4 +206,4 @@ class TestMasking:
         assert mask(Entity.PASSWORD, "Xk92LmQp4Zt") == "…[11 chars]"
 
     def test_ip_mask_keeps_first_octet_only(self):
-        assert mask(Entity.IP, "203.0.113.45") == "203.x.x.x"
+        assert mask(Entity.IP, "93.184.216.34") == "93.x.x.x"

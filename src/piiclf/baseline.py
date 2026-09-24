@@ -88,6 +88,22 @@ PLACEHOLDER_DOMAINS = frozenset({
     "localhost", "invalid", "sample.com", "mail.com", "somewhere.com",
 })
 
+# Licence headers name organizations, not people. Nearly every real Go file has one
+ORG_NAME_MARKERS = frozenset({
+    "authors", "contributors", "developers", "maintainers", "commiters",
+    "inc", "llc", "ltd", "corp", "corporation", "gmbh", "sa", "bv", "plc",
+    "foundation", "institude", "university", "college", "team", "project",
+    "software", "technologies", "technology", "systems", "solutions", "labs",
+    "laboratory", "group", "committee", "consortium", "community", "company",
+    "holdings", "partners", "associates", "enterprises", "industries"
+})
+
+def _is_organization(name: str) -> bool:
+    words = name.split()
+    if words and words[0].lower() == "the":
+        return True
+    return any(w.strip(".,").lower() in ORG_NAME_MARKERS for w in words)
+
 # Paths whose contents are fixtures, not real data.
 TEST_PATH_MARKERS = ("_test.go", "/testdata/", "/test/", "/tests/", "/mocks/",
                      "/mock/", "/fixtures/", "/examples/", "/example/", "_mock.go",
@@ -295,7 +311,8 @@ def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list
 
 
 def _is_reserved_ip(octets: list[int]) -> bool:
-    a, b = octets[0], octets[1]
+    """Private, loopback, link-local, multicast, and other non-routable IPv4."""
+    a, b, c = octets[0], octets[1], octets[2]
     return (
         a == 10
         or a == 127
@@ -306,6 +323,10 @@ def _is_reserved_ip(octets: list[int]) -> bool:
         or 224 <= a <= 239
         or a >= 240
         or octets == [255, 255, 255, 255]
+        or (a == 192 and b == 0 and c == 2)
+        or (a == 198 and b == 51 and c == 100)
+        or (a == 203 and b == 0 and c == 113)
+        or (a == 198 and 18 <= b <= 19)
     )
 
 

@@ -43,7 +43,9 @@ def scan_repo(
         try:
             if path.stat().st_size > MAX_FILE_BYTES:
                 continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+            # A BOM would otherwise decode to a leading U+FEFF character and 
+            # shift every stored char offset by one, invalidating gold-set spans.
+            text = path.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
 

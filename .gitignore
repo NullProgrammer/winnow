@@ -1,7 +1,13 @@
 .venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
 dist/
 build/
-*.egg-info/
-*.py[cod]
-__pycache__/
+.pytest_cache/
 .DS_Store
+
+# cloned repo and generated datasets are too large and not ours to commit but the 
+# lockfiles and the gold set must be, since they are the reproducibility record
+data/corpus/*
+data/synth

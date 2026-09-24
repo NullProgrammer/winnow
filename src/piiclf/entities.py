@@ -12,11 +12,6 @@ class Entity(str, Enum):
     PASSWORD = "PASSWORD"
 
 
-# Secrets get stricter masking than personal identifiers: for a credential the
-# only actionable detail is which provider issues it, never the value.
-SECRET_ENTITIES = frozenset({Entity.KEY, Entity.PASSWORD})
-
-
 @dataclass(frozen=True, slots=True)
 class Finding:
     entity: Entity
