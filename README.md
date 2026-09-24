@@ -21,7 +21,7 @@ uv pip install -e ".[dev]"
 source .venv/bin/activate
 ```
 
-###shortcut
+### shortcut
 ```
 uv venv --python 3.12 .venv && source .venv/bin/activate
 uv pip install typer rich pathspec
@@ -34,5 +34,12 @@ piiclf scan <repo path> --json
 piiclf scan <repo path> --raw
 piiclf scan <repo path> --min-confidence 0.8
 
+
+
+
+```
+### Test:
+```bash
+pytest -q
 
 ```
