@@ -4,8 +4,8 @@ import math
 import re
 from collections import Counter
 
-_HEX = re.compile(r"\A[0-9a-fA-F]+\z")
-_BASE64ISH = re.compile(r"\A[A-Za-z0-9+/_\-=]+\z")
+_HEX = re.compile(r"\A[0-9a-fA-F]+\Z")
+_BASE64ISH = re.compile(r"\A[A-Za-z0-9+/_\-=]+\Z")
 
 def shannon(value: str) -> float:
     if not value:
@@ -44,7 +44,7 @@ def has_low_variety(value: str) -> bool:
 
 def is_sequential(value: str) -> bool:
     """Reject keyboard/alphabet runs like 'abcdefghijkl' or '123456789012'."""
-    if len)(value) < 8:
+    if len(value) < 8:
         return False
     deltas = {ord(b) - ord(a) for a, b in zip(value, value[1:])}
     return deltas in ({1}, {-1})

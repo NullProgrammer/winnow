@@ -16,6 +16,7 @@ MAX_FILE_BYTES = 2_000_000
 
 def load_gitignore(root: Path) -> pathspec.PathSpec:
     patterns: list[str] = []
+    gi = root / ".gitignore"
     if gi.is_file():
         patterns = gi.read_text(encoding="utf-8", errors="replace").splitlines()
     return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
@@ -24,7 +25,7 @@ def iter_go_file(root: Path) -> list[Path]:
     spec = load_gitignore(root)
     out: list[Path] = []
     for p in root.rglob("*.go"):
-        if any(part in ALWAYS_SKIP_DIRS for part in path.parts):
+        if any(part in ALWAYS_SKIP_DIRS for part in p.parts):
             continue
         rel = p.relative_to(root).as_posix()
         if spec.match_file(rel):
@@ -33,7 +34,7 @@ def iter_go_file(root: Path) -> list[Path]:
     return sorted(out)
 
 def scan_repo(
-    root: Path, *, apply_suppressions: bool = True, skip_generated: bool = True
+    root: Path, *, apply_suppression: bool = True, skip_generated: bool = True
 ) -> tuple[list[Finding], int]:
     findings: list[Finding] = []
     scanned = 0
@@ -51,5 +52,5 @@ def scan_repo(
 
         scanned += 1
         rel = path.relative_to(root).as_posix()
-        findings.extend(detect(text, rel, apply_suppressions=apply_suppressions))
+        findings.extend(detect(text, rel, apply_suppression=apply_suppression))
     return findings, scanned

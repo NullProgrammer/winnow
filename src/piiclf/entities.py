@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 class Entity(str, Enum):
-    Name = "NAME"
+    NAME = "NAME"
     USERNAME = "USERNAME"
     EMAIL = "EMAIL"
     IP = "IP"
