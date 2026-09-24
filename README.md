@@ -36,3 +36,5 @@ piiclf scan <repo path> --min-confidence 0.8
 
 
 ```
+<img width="720" height="379" alt="Screenshot 2026-09-24 at 4 25 49 PM" src="https://github.com/user-attachments/assets/97b05759-cc05-49d0-ac7b-06cbf86e5ba6" />
+
