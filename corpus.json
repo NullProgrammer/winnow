@@ -1,0 +1,49 @@
+{
+  "_comment": "Corpus definition. Edit this, not Python, to change which repos are used. The eval and train sets MUST stay disjoint: eval is what the gold set is labeled from, train is only ever used for Phase 3 synthetic injection. Overlap would mean Phase 4 is graded on repos it trained against.",
+
+  "approved_licenses": [
+    "MIT",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Apache-1.1",
+    "Apache-2.0",
+    "AFL-2.1",
+    "Unlicense",
+    "WTFPL",
+    "Zlib",
+    "X11",
+    "MPL-1.1",
+    "MPL-2.0"
+  ],
+
+  "sets": {
+    "eval": {
+      "purpose": "Hand-labeled gold set. Never used for training.",
+      "repos": [
+        { "name": "gin", "url": "https://github.com/gin-gonic/gin", "role": "library" },
+        { "name": "cobra", "url": "https://github.com/spf13/cobra", "role": "library" },
+        { "name": "mux", "url": "https://github.com/gorilla/mux", "role": "library" },
+        { "name": "logrus", "url": "https://github.com/sirupsen/logrus", "role": "library" },
+        { "name": "client_golang", "url": "https://github.com/prometheus/client_golang", "role": "library" },
+        { "name": "telegraf", "url": "https://github.com/influxdata/telegraf", "role": "application" },
+        { "name": "gitea", "url": "https://github.com/go-gitea/gitea", "role": "application" },
+        { "name": "caddy", "url": "https://github.com/caddyserver/caddy", "role": "application" },
+        { "name": "etcd", "url": "https://github.com/etcd-io/etcd", "role": "application" }
+      ]
+    },
+
+    "train": {
+      "purpose": "Phase 3 synthetic injection only. Never labeled.",
+      "repos": [
+        { "name": "grpc-go", "url": "https://github.com/grpc/grpc-go", "role": "library" },
+        { "name": "zap", "url": "https://github.com/uber-go/zap", "role": "library" },
+        { "name": "testify", "url": "https://github.com/stretchr/testify", "role": "library" },
+        { "name": "go-sql-driver-mysql", "url": "https://github.com/go-sql-driver/mysql", "role": "library" },
+        { "name": "docker-cli", "url": "https://github.com/docker/cli", "role": "application" }
+      ]
+    }
+  },
+
+  "_role_note": "role=library repos carry almost no PII and exist to make PRECISION measurable; role=application repos carry naturally occurring credentials, emails and IPs in sample configs. A corpus of only applications would overstate prevalence and flatter the detector."
+}
