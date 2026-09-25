@@ -103,6 +103,98 @@ def label(
     )
 
 
+@app.command()
+def evaluate(
+    set_name: Annotated[str, typer.Option("--set")] = "eval",
+    gold_dir: Annotated[Path, typer.Option("--gold-dir")] = GOLD_ROOT,
+    corpus_root: Annotated[Path, typer.Option("--corpus-root")] = CORPUS_ROOT,
+) -> None:
+    """Score the baseline against the hand-verified gold set."""
+    from .evaluate import render, score, stratum_populations
+
+    gold = gold_dir / "gold.jsonl"
+    if not gold.exists():
+        typer.secho(f"No {gold}. Run `piiclf label` first.", fg="red", err=True)
+        raise typer.Exit(2)
+
+    typer.echo("Recomputing stratum populations (needed to reweight the sample) ...")
+    pops = stratum_populations(set_name, corpus_root)
+    render(score(gold, pops), pops)
+
+
+@app.command()
+def generate(
+    set_name: Annotated[str, typer.Option("--set", help="Corpus to inject into.")] = "train",
+    target: Annotated[int, typer.Option("--target", help="Training windows to emit.")] = 30_000,
+    seed: Annotated[int, typer.Option("--seed")] = 20260925,
+    corpus_root: Annotated[Path, typer.Option("--corpus-root")] = CORPUS_ROOT,
+    out_dir: Annotated[Path, typer.Option("--out-dir")] = Path("data/synth"),
+    check: Annotated[int, typer.Option("--check", help="Windows to BIO-verify.")] = 300,
+) -> None:
+    """Generate the synthetic BIO-labeled training corpus."""
+    from .dataset import build
+
+    if set_name == "eval":
+        typer.secho(
+            "Refusing: the eval corpus is reserved for the gold set. Training on it "
+            "would invalidate every Phase 4 number.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    typer.echo(f"Injecting into the {set_name} corpus ...")
+    summary = build(corpus_root, set_name, out_dir, target=target, seed=seed)
+
+    for split, info in summary["splits"].items():
+        typer.echo(f"\n{split}: {info['windows']} windows from {info['files_available']} files "
+                   f"(vocab: {info['vocab']})")
+        for label, n in list(info["label_counts"].items())[:8]:
+            typer.echo(f"    {label:24} {n}")
+
+    typer.echo(f"\nVerifying BIO alignment on {check} windows ...")
+    failures = _verify_bio(out_dir / "train.jsonl", check)
+    if failures:
+        typer.secho(f"{len(failures)} alignment failures:", fg="red", err=True)
+        for f in failures[:5]:
+            typer.secho(f"  {f}", fg="red", err=True)
+        raise typer.Exit(1)
+    typer.secho(f"Alignment verified on {check} windows: 0 failures.", fg="green")
+
+
+def _verify_bio(path: Path, limit: int) -> list[str]:
+    """Round-trip every span through tokenization and back to characters."""
+    from transformers import AutoTokenizer
+
+    from .gold import read_jsonl
+    from .tokenize_align import align, decode_spans, verify_alignment
+
+    tok = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
+    failures: list[str] = []
+
+    for row in read_jsonl(path)[:limit]:
+        try:
+            aligned = align(row["text"], row["spans"], tok)
+            verify_alignment(row["text"], row["spans"], aligned)
+            # The round trip is the real test: labels must decode back to text
+            # that contains the value that was injected.
+            got = decode_spans(aligned["offset_mapping"], aligned["labels"])
+            for span in row["spans"]:
+                match = [d for d in got if d["label"] == span["label"]
+                         and d["end"] > span["start"] and d["start"] < span["end"]]
+                if not match:
+                    continue
+                recovered = row["text"][match[0]["start"]: match[0]["end"]]
+                if span["text"] not in recovered:
+                    failures.append(
+                        f"{row['path']}: {span['label']} decoded {recovered!r} "
+                        f"missing {span['text']!r}"
+                    )
+        except AssertionError as exc:
+            failures.append(f"{row['path']}: {exc}")
+
+    return failures
+
 
 if __name__ == "__main__":
     app()
