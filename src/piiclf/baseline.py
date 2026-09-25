@@ -55,14 +55,38 @@ DSN_CREDS = re.compile(
 )
 
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
-IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+# The lookarounds matter: a bare \b let SNMP OIDs like ".1.3.6.1.6.3.1.1.4.1.0"
+# match their inner "6.3.1.1" as a dotted quad. An address is never flanked by
+# another dot or digit.
+IPV4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+
 AT_HANDLE = re.compile(r"(?:^|\s)@(?P<handle>[A-Za-z0-9][A-Za-z0-9_\-]{2,38})\b")
 
+# T-SQL variables are spelled exactly like handles. telegraf embeds large SQL
+# strings, and `DECLARE @ErrorMessage` / `SET @Tables` accounted for most of the
+# at-handle stratum's false positives.
+#
+# Matched on the variable's own syntax rather than on SQL keywords anywhere in
+# the line: a keyword list containing `from`/`set`/`where` suppressed
+# "authored by @awilliams" because the prose contained "from".
+SQL_VAR_LEFT = re.compile(r"(?i)\b(?:declare|set|into|exec|output)\s+$")
+SQL_VAR_RIGHT = re.compile(
+    r"(?i)\A\s+as\s+(?:n?(?:var)?char|int|bigint|bit|sysname|table|cursor|decimal|datetime|float)"
+)
+
 # NAME is only tractable for regex inside attribution comments.
+#
+# Case-sensitivity in the name group is load-bearing. These were written with a
+# leading `(?i)`, which made `[A-Z][a-z]+` match lowercase too — so
+# `// Author represents an author` captured "represents an author" (the whole
+# author-comment stratum scored 0/8), and `Copyright 2015 Matthew Holt and The
+# Caddy Authors` over-captured "Matthew Holt and". Scoping the flag to just the
+# keyword fixes both: "and" no longer satisfies `[A-Z]`.
 NAME_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("author-tag", re.compile(r"(?i)@author\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,2})")),
-    ("author-comment", re.compile(r"(?i)//\s*(?:author|maintainer|written by|created by)\s*:?\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,2})")),
-    ("copyright", re.compile(r"(?i)copyright\s*(?:\(c\)|©)?\s*(?:\d{4}(?:\s*-\s*\d{4})?)?\s*,?\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,2})")),
+    ("author-tag", re.compile(r"(?i:@author)\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,2})")),
+    ("author-comment", re.compile(r"//\s*(?i:author|maintainer|written by|created by)\s*:?\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,2})")),
+    ("copyright", re.compile(r"(?i:copyright)\s*(?:\(c\)|©)?\s*(?:\d{4}(?:\s*-\s*\d{4})?)?\s*,?\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z'\-]+){1,2})")),
 )
 
 # --- suppression vocab --------------------------------------------------------
@@ -88,21 +112,25 @@ PLACEHOLDER_DOMAINS = frozenset({
     "localhost", "invalid", "sample.com", "mail.com", "somewhere.com",
 })
 
-# Licence headers name organizations, not people. Nearly every real Go file has one
+# License headers name organizations, not people. Nearly every real Go file has
+# one, so without this the copyright detector buries everything else: scanning
+# the Go source tree produced 10,505 NAME hits, every one "The Go Authors".
 ORG_NAME_MARKERS = frozenset({
-    "authors", "contributors", "developers", "maintainers", "commiters",
+    "authors", "contributors", "developers", "maintainers", "committers",
     "inc", "llc", "ltd", "corp", "corporation", "gmbh", "sa", "bv", "plc",
-    "foundation", "institude", "university", "college", "team", "project",
+    "foundation", "institute", "university", "college", "team", "project",
     "software", "technologies", "technology", "systems", "solutions", "labs",
     "laboratory", "group", "committee", "consortium", "community", "company",
-    "holdings", "partners", "associates", "enterprises", "industries"
+    "holdings", "partners", "associates", "enterprises", "industries",
 })
+
 
 def _is_organization(name: str) -> bool:
     words = name.split()
     if words and words[0].lower() == "the":
         return True
     return any(w.strip(".,").lower() in ORG_NAME_MARKERS for w in words)
+
 
 # Paths whose contents are fixtures, not real data.
 TEST_PATH_MARKERS = ("_test.go", "/testdata/", "/test/", "/tests/", "/mocks/",
@@ -115,6 +143,10 @@ UUID = re.compile(r"(?i)\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 ENV_VAR_NAME = re.compile(r"\A[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\Z")
 GO_SUM_HASH = re.compile(r"\Ah1:[A-Za-z0-9+/=]+\Z")
 URL_VALUE = re.compile(r"(?i)\A(?:https?|wss?|ftp|grpc|file)://|\A//")
+
+# `authorized_principals` (a filename) passed the entropy gate. A credential is
+# not spelled as lowercase words joined by underscores.
+SNAKE_WORDS = re.compile(r"\A[a-z]+(?:_[a-z]+)+\Z")
 TEMPLATE_REF = re.compile(r"\A(?:\$\{[^}]*\}|\{\{[^}]*\}\}|<[^>]*>|%[sv]|\$[A-Z_]+)\Z")
 
 
@@ -147,7 +179,7 @@ def _is_plausible_key(value: str) -> bool:
     bits/char. A credential is a single whitespace-free token of bounded
     length, so that alone removes the whole class.
     """
-    if URL_VALUE.match(value):
+    if URL_VALUE.match(value) or SNAKE_WORDS.match(value):
         return False
     if any(ch.isspace() for ch in value):
         return False
@@ -184,12 +216,19 @@ def _string_group(m: re.Match[str]) -> tuple[str, int, int] | None:
     return None
 
 
-def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list[Finding]:
+def detect(
+    text: str, path: str = "", *, apply_suppression: bool = True, dedupe: bool = True
+) -> list[Finding]:
     """Find PII candidates in Go source.
 
     `apply_suppression=False` returns the raw candidate stream. Phase 5 needs
     that to measure how much of the precision comes from the suppression rules
     alone versus from the model.
+
+    `dedupe=False` keeps overlapping findings from different detectors. Gold-set
+    sampling stratifies by detector, and `_dedupe` collapses on
+    `(entity, start, end)` — so deduping first would silently drop the losing
+    detector's attribution and bias the strata.
     """
     idx = _LineIndex(text)
     out: list[Finding] = []
@@ -205,8 +244,12 @@ def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list
             value = m.group(0)
             if apply_suppression and _is_placeholder(value):
                 continue
-            # A provider prefix is strong evidence even in a test file, so we
-            # keep it and only discount confidence.
+            # PEM headers in test paths measured 0/9 precision: every hit was a
+            # generated keypair fixture or an assert.Regexp pattern. Issued
+            # credentials (AWS, GitHub, Stripe) stay even in tests — a real one
+            # committed there is still a leak — just at lower confidence.
+            if test_ctx and detector == "private-key-pem":
+                continue
             add(Entity.KEY, value, m.start(), m.end(), detector, 0.70 if test_ctx else 0.95)
 
     for m in KEY_ASSIGN.finditer(text):
@@ -235,6 +278,10 @@ def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list
         # are disqualifying here — unlike keys, which allow no whitespace at all.
         if apply_suppression and ("\n" in value or len(value) > 100):
             continue
+        # `passwordURL = "https://api.pwnedpasswords.com/range/"` — the URL
+        # guard was on the key path only, so URLs leaked through as passwords.
+        if apply_suppression and URL_VALUE.match(value):
+            continue
         if test_ctx:
             continue
         add(Entity.PASSWORD, value, s, e, "password-assignment", 0.75)
@@ -262,7 +309,14 @@ def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list
         domain = value.rsplit("@", 1)[-1].lower()
         if apply_suppression and (domain in PLACEHOLDER_DOMAINS or _is_placeholder(value)):
             continue
-        if apply_suppression and value.lower().startswith(("noreply@", "no-reply@", "donotreply@")):
+        # Covers both the local part (`noreply@x`) and the domain
+        # (`user@users.noreply.github.com`) — GitHub issues the latter
+        # specifically so commits don't expose a real address.
+        if apply_suppression and (
+            value.lower().startswith(("noreply@", "no-reply@", "donotreply@"))
+            or "noreply." in domain
+            or domain.startswith("noreply")
+        ):
             continue
         add(Entity.EMAIL, value, m.start(), m.end(), "email", 0.60 if test_ctx else 0.90)
 
@@ -277,7 +331,10 @@ def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list
         line_start = text.rfind("\n", 0, m.start()) + 1
         line_end = text.find("\n", m.end())
         line_text = text[line_start : line_end if line_end != -1 else len(text)]
-        if apply_suppression and re.search(r"(?i)\bversion\b|\bv\d", line_text):
+        # `\bversion\b` missed `rubygems_version: 2.7.6.2`, because `_` is a word
+        # character so there's no boundary before "version". Anchoring on a
+        # separator instead still avoids matching "conversion".
+        if apply_suppression and re.search(r"(?i)(?:^|[\s_.\-])version|\bv\d", line_text):
             continue
         add(Entity.IP, value, m.start(), m.end(), "ipv4", 0.55 if test_ctx else 0.80)
 
@@ -298,20 +355,32 @@ def detect(text: str, path: str = "", *, apply_suppression: bool = True) -> list
             continue
         if test_ctx:
             continue
+        if apply_suppression:
+            at = m.start("handle") - 1  # the '@' itself
+            line_start = text.rfind("\n", 0, at) + 1
+            if SQL_VAR_LEFT.search(text[line_start:at]) or SQL_VAR_RIGHT.match(
+                text[m.end("handle") : m.end("handle") + 40]
+            ):
+                continue
         add(Entity.USERNAME, value, m.start("handle"), m.end("handle"), "at-handle", 0.45)
 
     for detector, pattern in NAME_PATTERNS:
         for m in pattern.finditer(text):
             value = m.group("name")
-            if apply_suppression and _is_placeholder(value):
+            if apply_suppression and (_is_placeholder(value) or _is_organization(value)):
                 continue
             add(Entity.NAME, value, m.start("name"), m.end("name"), detector, 0.75)
 
-    return _dedupe(out)
+    return _dedupe(out) if dedupe else sorted(out, key=lambda f: (f.start, f.entity.value))
 
 
 def _is_reserved_ip(octets: list[int]) -> bool:
-    """Private, loopback, link-local, multicast, and other non-routable IPv4."""
+    """Private, loopback, link-local, multicast — plus the documentation ranges.
+
+    RFC 5737 (192.0.2/24, 198.51.100/24, 203.0.113/24) and RFC 2544
+    (198.18/15) exist precisely so docs and tests have addresses that route
+    nowhere. Treating them as findings would flag every well-written example.
+    """
     a, b, c = octets[0], octets[1], octets[2]
     return (
         a == 10

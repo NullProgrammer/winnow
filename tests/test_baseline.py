@@ -91,6 +91,75 @@ class TestSuppression:
         ):
             assert Entity.NAME not in entities(detect(org + "\n", "main.go")), org
 
+class TestPhase2Fixes:
+    """Seven false-positive classes measured on the eval corpus gold sample.
+
+    Together these accounted for 56 of 70 suppression survivors being wrong.
+    """
+
+    def test_doc_comment_about_an_author_field_is_not_a_name(self):
+        # The `(?i)` flag made [A-Z][a-z]+ match lowercase, so prose matched.
+        for line in (
+            "// Author represents an author",
+            "// Author contains the commit author information",
+            "// Author is the GitHub/Gitea user who authored the commit",
+            "// author cannot approve their own PR, so it is waived",
+        ):
+            assert Entity.NAME not in entities(detect(line + "\n", "main.go")), line
+
+    def test_copyright_name_stops_before_lowercase_and(self):
+        src = "// Copyright 2015 Matthew Holt and The Caddy Authors\n"
+        assert "Matthew Holt" in values(detect(src, "main.go"), Entity.NAME)
+
+    def test_snmp_oids_are_not_ips(self):
+        for line in ('oid: ".1.3.6.1.6.3.1.1.4.1.0"', 'x := ".1.0.0.1.3"', 'n := ".9.1.1.1.6"'):
+            assert Entity.IP not in entities(detect(line + "\n", "main.go")), line
+
+    def test_plain_ip_still_found_next_to_a_port(self):
+        assert "93.184.216.34" in values(detect('h := "93.184.216.34:8080"\n', "a.go"), Entity.IP)
+
+    def test_tsql_variables_are_not_handles(self):
+        for line in (
+            "DECLARE @ErrorMessage AS nvarchar(500) = 'oops'",
+            "SET @Tables += N'x'",
+            "INSERT INTO @PCounters SELECT * FROM PerfCounters;",
+        ):
+            assert Entity.USERNAME not in entities(detect(line + "\n", "q.go")), line
+
+    def test_real_handle_in_prose_still_found(self):
+        src = "// taken from a playground link, authored by @awilliams.\n"
+        assert "awilliams" in values(detect(src, "main.go"), Entity.USERNAME)
+
+    def test_url_assigned_to_password_var_is_not_a_password(self):
+        src = 'passwordURL = "https://api.pwnedpasswords.com/range/"\n'
+        assert Entity.PASSWORD not in entities(detect(src, "pwn.go"))
+
+    def test_snake_case_filename_is_not_a_key(self):
+        src = 'const authorizedPrincipalsFile = "authorized_principals"\n'
+        assert Entity.KEY not in entities(detect(src, "ssh.go"))
+
+    def test_pem_in_test_file_suppressed_but_issued_key_kept(self):
+        pem = 'k := `-----BEGIN OPENSSH PRIVATE KEY-----`\n'
+        assert Entity.KEY not in entities(detect(pem, "models/ssh_key_test.go"))
+        # An issued credential in a test file is still a leak worth flagging.
+        assert Entity.KEY in entities(detect(f'k := "{FAKE_AWS}"\n', "models/ssh_key_test.go"))
+
+    def test_underscored_version_key_is_not_an_ip(self):
+        assert Entity.IP not in entities(detect("rubygems_version: 2.7.6.2\n", "m.go"))
+
+    def test_conversion_does_not_suppress_a_real_ip(self):
+        src = 'addr := "93.184.216.34" // conversion helper\n'
+        assert "93.184.216.34" in values(detect(src, "m.go"), Entity.IP)
+
+    def test_github_noreply_domain_suppressed(self):
+        src = '"email": "baxterthehacker@users.noreply.github.com",\n'
+        assert Entity.EMAIL not in entities(detect(src, "hook.go"))
+
+    def test_pem_outside_tests_still_found(self):
+        assert Entity.KEY in entities(detect("k := `-----BEGIN RSA PRIVATE KEY-----`\n", "k.go"))
+
+
+class TestOtherEntities2:
     def test_real_person_in_copyright_still_found(self):
         src = "// Copyright (c) 2024 Jane Roe\n"
         assert "Jane Roe" in values(detect(src, "main.go"), Entity.NAME)
