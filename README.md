@@ -324,3 +324,6 @@ Gotcha worth recording: `reference_compile` is a **config attribute, not a `from
 - Training data: permissively licensed public repos + synthetic only.
 - **No real secrets in any fixture, test, or eval set**, regardless of provenance.
 - All dependencies are permissively licensed (BSD / Apache-2.0 / MIT / MPL-2.0).
+
+
+<img width="720" height="379" alt="Screenshot 2026-09-24 at 4 25 49 PM" src="https://github.com/user-attachments/assets/97b05759-cc05-49d0-ac7b-06cbf86e5ba6" />
