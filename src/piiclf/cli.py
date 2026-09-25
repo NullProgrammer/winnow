@@ -5,8 +5,12 @@ from typing import Annotated
 
 import typer
 
+from . import gold as gold_mod
 from .report import render_table, to_json
 from .scan import scan_repo
+
+CORPUS_ROOT = Path("data/corpus")
+GOLD_ROOT = Path("data/gold")
 
 app = typer.Typer(
     add_completion=False,
@@ -47,6 +51,36 @@ def scan(
         typer.echo(to_json(findings))
     else:
         render_table(findings, scanned)
+
+
+@app.command()
+def sample(
+    set_name: Annotated[str, typer.Option("--set")] = "eval",
+    budget: Annotated[int, typer.Option("--budget", help="How many candidates to draw.")] = 150,
+    seed: Annotated[int, typer.Option("--seed")] = 20260924,
+    corpus_root: Annotated[Path, typer.Option("--corpus-root")] = CORPUS_ROOT,
+    out_dir: Annotated[Path, typer.Option("--out-dir")] = GOLD_ROOT,
+    show_strata: Annotated[bool, typer.Option("--show-strata")] = True,
+) -> None:
+    """Draw a stratified candidate sample for labeling."""
+    typer.echo(f"Collecting candidates across the {set_name} corpus ...")
+    cands = gold_mod.collect_candidates(set_name, corpus_root)
+    picked, sizes = gold_mod.sample_candidates(cands, budget, seed)
+
+    if show_strata:
+        typer.echo(f"\n{'stratum':44} {'pop':>6} {'drawn':>6}")
+        drawn = {s: 0 for s in sizes}
+        for c in picked:
+            drawn[c.stratum] += 1
+        for s in sorted(sizes, key=lambda k: -sizes[k]):
+            mark = "  <-- kept by suppression" if s.endswith("|kept") else ""
+            typer.echo(f"{s:44} {sizes[s]:6} {drawn[s]:6}{mark}")
+
+    path = gold_mod.write_jsonl(gold_mod.candidate_rows(picked), out_dir / "candidates.jsonl")
+    typer.echo(
+        f"\n{len(cands)} raw candidates in {len(sizes)} strata; drew {len(picked)}.\nWrote {path}"
+    )
+
 
 
 if __name__ == "__main__":
