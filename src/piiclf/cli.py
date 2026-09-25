@@ -82,6 +82,27 @@ def sample(
     )
 
 
+@app.command()
+def label(
+    gold_dir: Annotated[Path, typer.Option("--gold-dir")] = GOLD_ROOT,
+    limit: Annotated[int, typer.Option("--limit", help="Stop after N items.")] = 0,
+) -> None:
+    """Verify Claude's proposed labels, one keystroke each. Resumable."""
+    from .labeler import run_session
+
+    candidates = gold_dir / "candidates.jsonl"
+    if not candidates.exists():
+        typer.secho(f"No {candidates}. Run `piiclf sample` first.", fg="red", err=True)
+        raise typer.Exit(2)
+
+    run_session(
+        candidates_path=candidates,
+        gold_path=gold_dir / "gold.jsonl",
+        prelabels_path=gold_dir / "prelabels.jsonl",
+        limit=limit or None,
+    )
+
+
 
 if __name__ == "__main__":
     app()
