@@ -39,6 +39,19 @@ class Value:
     entity: str | None  # None means hard negative
     why: str            # provenance, so we can analyse which classes the model misses
     kinds: tuple[str, ...]
+    # Region *within* `text` that carries the entity. Needed for compound
+    # values like `Joseph Watson <jw@x.us>`, where the rubric says the name is
+    # NOT PII but the email is. Without this the generator could only emit
+    # all-positive or all-negative text, so the model never saw the two mixed
+    # and over-generalised "attribution comment -> suppress everything" —
+    # which is exactly how it missed 2 of 3 real emails on the gold set.
+    label_start: int = 0
+    label_len: int | None = None  # None means the whole of `text`
+
+    @property
+    def labeled_text(self) -> str:
+        end = len(self.text) if self.label_len is None else self.label_start + self.label_len
+        return self.text[self.label_start : end]
 
 
 # --- held-out vocabularies ----------------------------------------------------
@@ -82,7 +95,26 @@ def _email(rng: random.Random, v: dict) -> Value:
             f"{given.lower()}_{sur.lower()}",
         ]
     )
-    return Value(f"{local}@{rng.choice(v['domains'])}", "EMAIL", "personal-email", STR_COMMENT)
+    addr = f"{local}@{rng.choice(v['domains'])}"
+
+    # 40% of emails appear inside an attribution line. This is the shape the
+    # model failed on: the surrounding name is a negative per the rubric, the
+    # email is a positive, and only the email gets labeled.
+    if rng.random() < 0.4:
+        form = rng.choice(
+            [
+                f"{given} {sur} <{addr}>",
+                f"Copyright (c) {rng.randint(2012, 2026)} {given} {sur} ({addr})",
+                f"Author: {given} {sur} <{addr}>",
+                f"maintained by {given} {sur}, {addr}",
+            ]
+        )
+        return Value(
+            form, "EMAIL", "email-in-attribution", COMMENT,
+            label_start=form.index(addr), label_len=len(addr),
+        )
+
+    return Value(addr, "EMAIL", "personal-email", STR_COMMENT)
 
 
 def _key(rng: random.Random, v: dict) -> Value:

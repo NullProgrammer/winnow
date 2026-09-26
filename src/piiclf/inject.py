@@ -117,8 +117,12 @@ def inject_file(
         out = out[:lo] + sub + out[hi:]
         delta += len(sub) - (site.end - site.start)
 
-        start = lo + offset
-        span = Span(start, start + len(value.text), value.entity or value.why, value.text)
+        # label_start/label_len let a compound value label only part of itself:
+        # in `Joseph Watson <jw@x.us>` the name is not PII per the rubric but
+        # the email is, and the model needs to see that mix.
+        start = lo + offset + value.label_start
+        labeled = value.labeled_text
+        span = Span(start, start + len(labeled), value.entity or value.why, labeled)
         (spans if value.entity else distractors).append(span)
 
     spans.sort(key=lambda s: s.start)

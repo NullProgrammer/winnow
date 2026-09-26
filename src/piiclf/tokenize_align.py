@@ -53,34 +53,40 @@ def align(
         max_length=max_length,
     )
     offsets = enc["offset_mapping"]
-    labels = [IGNORE_INDEX] * len(offsets)
-    weights = [0.0] * len(offsets)
+    o_id = LABEL2ID["O"]
+    labels = [o_id if e > s else IGNORE_INDEX for s, e in offsets]
+    weights = [1.0 if e > s else 0.0 for s, e in offsets]
 
-    ordered = sorted(spans, key=lambda s: s["start"])
+    # Single pass per span using a moving pointer, rather than rescanning every
+    # offset for every span. This runs on every training example, so the old
+    # O(spans x tokens) scan was pure overhead.
+    entity_spans = [s for s in sorted(spans, key=lambda s: s["start"]) if s["label"] in ENTITIES]
+    cursor = 0
+    for span in entity_spans:
+        start, end, entity = span["start"], span["end"], span["label"]
+        # Offsets are monotonic, so skip tokens that end before this span opens.
+        while cursor < len(offsets) and (offsets[cursor][1] <= start or offsets[cursor][1] <= offsets[cursor][0]):
+            cursor += 1
 
-    # First pass: real tokens default to O with unit weight.
-    for i, (s, e) in enumerate(offsets):
-        if e > s:
-            labels[i] = LABEL2ID["O"]
-            weights[i] = 1.0
+        member = []
+        i = cursor
+        while i < len(offsets):
+            s, e = offsets[i]
+            if e > s:
+                if s >= end:
+                    break
+                if e > start:
+                    member.append(i)
+            i += 1
 
-    # Second pass: project each span, then normalise its weight by its length.
-    for span in ordered:
-        entity = span["label"]
-        if entity not in ENTITIES:
-            continue  # distractors carry a `why`, not an entity; they stay O
-        member = [
-            i
-            for i, (s, e) in enumerate(offsets)
-            if e > s and e > span["start"] and s < span["end"]
-        ]
         if not member:
             continue
-        for rank, i in enumerate(member):
-            labels[i] = LABEL2ID[f"{'B' if rank == 0 else 'I'}-{entity}"]
+        b_id = LABEL2ID[f"B-{entity}"]
+        i_id = LABEL2ID[f"I-{entity}"]
         w = 1.0 / len(member)
-        for i in member:
-            weights[i] = w
+        for rank, idx in enumerate(member):
+            labels[idx] = b_id if rank == 0 else i_id
+            weights[idx] = w
 
     return {
         "input_ids": enc["input_ids"],
@@ -126,8 +132,21 @@ def verify_alignment(text: str, spans: list[dict], aligned: dict) -> None:
         )
 
 
-def decode_spans(offsets: list[tuple[int, int]], label_ids: list[int]) -> list[dict]:
-    """BIO token labels -> character spans. Inverse of `align`, for scoring."""
+# Byte-level BPE folds the preceding space — and often the opening quote — into
+# a span's first token, so a decoded span starts at ` "` rather than at the
+# value. Without trimming, exact-match scoring fails on nearly every EMAIL and
+# IP (measured: overlap F1 0.99 vs exact 0.27). The annotation rubric already
+# says spans exclude quotes, so trimming matches the label definition.
+TRIM_CHARS = " \t\r\n\"'`"
+
+
+def decode_spans(
+    offsets: list[tuple[int, int]], label_ids: list[int], text: str | None = None
+) -> list[dict]:
+    """BIO token labels -> character spans. Inverse of `align`, for scoring.
+
+    Pass `text` to trim whitespace and quote delimiters off the span edges.
+    """
     out: list[dict] = []
     cur: dict | None = None
 
@@ -150,4 +169,17 @@ def decode_spans(offsets: list[tuple[int, int]], label_ids: list[int]) -> list[d
 
     if cur:
         out.append(cur)
-    return out
+
+    if text is None:
+        return out
+
+    trimmed: list[dict] = []
+    for span in out:
+        s, e = span["start"], span["end"]
+        while s < e and text[s] in TRIM_CHARS:
+            s += 1
+        while e > s and text[e - 1] in TRIM_CHARS:
+            e -= 1
+        if e > s:
+            trimmed.append({"start": s, "end": e, "label": span["label"]})
+    return trimmed
