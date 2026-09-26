@@ -1,0 +1,86 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+tokenizing (once, not per epoch) ...
+  tokenized 2000/10000 (2828/s)
+  tokenized 4000/10000 (2822/s)
+  tokenized 6000/10000 (2838/s)
+  tokenized 8000/10000 (2836/s)
+  tokenized 10000/10000 (2728/s)
+train 10000 windows | val 1000 windows
+Loading weights:   0%|          | 0/136 [00:00<?, ?it/s]Loading weights: 100%|██████████| 136/136 [00:00<00:00, 6437.56it/s]
+[transformers] [1mModernBertForTokenClassification LOAD REPORT[0m from: answerdotai/ModernBERT-base
+Key               | Status     | 
+------------------+------------+-
+decoder.bias      | UNEXPECTED | 
+classifier.weight | MISSING    | 
+classifier.bias   | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+device mps | params 149.6M
+  epoch 1 step 50/625 loss 0.9229 3.9 ex/s
+  epoch 1 step 100/625 loss 0.4771 4.9 ex/s
+  epoch 1 step 150/625 loss 0.3199 5.5 ex/s
+  epoch 1 step 200/625 loss 0.2419 5.7 ex/s
+  epoch 1 step 250/625 loss 0.1945 5.7 ex/s
+  epoch 1 step 300/625 loss 0.1623 5.6 ex/s
+  epoch 1 step 350/625 loss 0.1393 5.7 ex/s
+  epoch 1 step 400/625 loss 0.1220 5.8 ex/s
+  epoch 1 step 450/625 loss 0.1085 5.9 ex/s
+  epoch 1 step 500/625 loss 0.0979 6.0 ex/s
+  epoch 1 step 550/625 loss 0.0891 6.1 ex/s
+  epoch 1 step 600/625 loss 0.0817 6.1 ex/s
+epoch 1: val_loss 0.0048 macro-F1(exact) 0.916 EMAIL-F1 0.964 [27.8 min]
+    EMAIL     P 0.96 R 0.97 F1 0.96 (tp 321 fp 14 fn 10)
+    IP        P 0.99 R 1.00 F1 0.99 (tp 353 fp 4 fn 0)
+    KEY       P 0.74 R 0.81 F1 0.77 (tp 126 fp 45 fn 29)
+    NAME      P 0.89 R 0.88 F1 0.88 (tp 107 fp 13 fn 15)
+    PASSWORD  P 0.95 R 0.98 F1 0.97 (tp 119 fp 6 fn 2)
+    USERNAME  P 0.88 R 0.95 F1 0.91 (tp 126 fp 17 fn 7)
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.54it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.54it/s]
+    saved checkpoint (best macro-F1 0.916)
+  epoch 2 step 50/625 loss 0.0022 7.0 ex/s
+  epoch 2 step 100/625 loss 0.0012 6.4 ex/s
+  epoch 2 step 150/625 loss 0.0008 6.4 ex/s
+  epoch 2 step 200/625 loss 0.0006 6.6 ex/s
+  epoch 2 step 250/625 loss 0.0005 6.6 ex/s
+  epoch 2 step 300/625 loss 0.0004 6.7 ex/s
+  epoch 2 step 350/625 loss 0.0004 6.7 ex/s
+  epoch 2 step 400/625 loss 0.0003 6.8 ex/s
+  epoch 2 step 450/625 loss 0.0003 6.8 ex/s
+  epoch 2 step 500/625 loss 0.0003 6.7 ex/s
+  epoch 2 step 550/625 loss 0.0002 6.3 ex/s
+  epoch 2 step 600/625 loss 0.0002 6.3 ex/s
+epoch 2: val_loss 0.0060 macro-F1(exact) 0.923 EMAIL-F1 0.964 [27.1 min]
+    EMAIL     P 0.96 R 0.97 F1 0.96 (tp 321 fp 14 fn 10)
+    IP        P 1.00 R 1.00 F1 1.00 (tp 353 fp 1 fn 0)
+    KEY       P 0.83 R 0.90 F1 0.86 (tp 139 fp 28 fn 16)
+    NAME      P 0.81 R 0.83 F1 0.82 (tp 101 fp 23 fn 21)
+    PASSWORD  P 0.94 R 0.98 F1 0.96 (tp 118 fp 8 fn 3)
+    USERNAME  P 0.93 R 0.94 F1 0.94 (tp 125 fp 9 fn 8)
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.39it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.38it/s]
+    saved checkpoint (best macro-F1 0.923)
+  epoch 3 step 50/625 loss 0.0000 6.9 ex/s
+  epoch 3 step 100/625 loss 0.0000 6.8 ex/s
+  epoch 3 step 150/625 loss 0.0000 6.8 ex/s
+  epoch 3 step 200/625 loss 0.0000 6.9 ex/s
+  epoch 3 step 250/625 loss 0.0000 6.8 ex/s
+  epoch 3 step 300/625 loss 0.0000 6.5 ex/s
+  epoch 3 step 350/625 loss 0.0000 6.5 ex/s
+  epoch 3 step 400/625 loss 0.0000 6.6 ex/s
+  epoch 3 step 450/625 loss 0.0000 6.6 ex/s
+  epoch 3 step 500/625 loss 0.0000 6.6 ex/s
+  epoch 3 step 550/625 loss 0.0000 6.7 ex/s
+  epoch 3 step 600/625 loss 0.0000 6.7 ex/s
+epoch 3: val_loss 0.0051 macro-F1(exact) 0.936 EMAIL-F1 0.967 [26.0 min]
+    EMAIL     P 0.96 R 0.97 F1 0.97 (tp 322 fp 13 fn 9)
+    IP        P 1.00 R 1.00 F1 1.00 (tp 353 fp 1 fn 0)
+    KEY       P 0.83 R 0.90 F1 0.86 (tp 139 fp 29 fn 16)
+    NAME      P 0.87 R 0.89 F1 0.88 (tp 108 fp 16 fn 14)
+    PASSWORD  P 0.93 R 0.98 F1 0.95 (tp 118 fp 9 fn 3)
+    USERNAME  P 0.96 R 0.95 F1 0.96 (tp 127 fp 5 fn 6)
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.98it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  3.98it/s]
+    saved checkpoint (best macro-F1 0.936)
+
+Best macro-F1 (exact): 0.936
+Checkpoint + history: checkpoints/bio-markers
