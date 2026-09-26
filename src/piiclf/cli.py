@@ -37,6 +37,8 @@ def scan(
         ),
     ] = False,
     min_confidence: Annotated[float, typer.Option("--min-confidence")] = 0.0,
+    model_dir: Annotated[Path | None, typer.Option("--model",
+        help="Use the fine-tuned model instead of the regex baseline.")] = None,
 ) -> None:
     """Scan a Go repository for PII and credential candidates. Values are always masked."""
     root = path.expanduser().resolve()
@@ -44,7 +46,15 @@ def scan(
         typer.secho(f"Not a directory: {root}", fg="red", err=True)
         raise typer.Exit(2)
 
-    findings, scanned = scan_repo(root, apply_suppression=not raw)
+    if model_dir is not None:
+        if not model_dir.exists():
+            typer.secho(f"No model at {model_dir} \u2014 run `piiclf train` first.", fg="red", err=True)
+            raise typer.Exit(2)
+        from .model_scan import scan_repo_with_model
+
+        findings, scanned = scan_repo_with_model(root, model_dir, min_confidence, log=typer.echo)
+    else:
+        findings, scanned = scan_repo(root, apply_suppression=not raw)
     findings = [f for f in findings if f.confidence >= min_confidence]
 
     if json_out:
@@ -194,6 +204,68 @@ def _verify_bio(path: Path, limit: int) -> list[str]:
             failures.append(f"{row['path']}: {exc}")
 
     return failures
+
+
+@app.command()
+def train(
+    train_path: Annotated[Path, typer.Option("--train")] = Path("data/synth/train.jsonl"),
+    val_path: Annotated[Path, typer.Option("--val")] = Path("data/synth/val.jsonl"),
+    out_dir: Annotated[Path, typer.Option("--out")] = Path("checkpoints/bio-modernbert"),
+    epochs: Annotated[int, typer.Option("--epochs")] = 3,
+    batch_size: Annotated[int, typer.Option("--batch-size")] = 16,
+    lr: Annotated[float, typer.Option("--lr")] = 5e-5,
+    max_length: Annotated[int, typer.Option("--max-length")] = 512,
+    limit: Annotated[int, typer.Option("--limit", help="Use only the first N train windows.")] = 0,
+    val_limit: Annotated[int, typer.Option("--val-limit")] = 0,
+    markers: Annotated[bool, typer.Option("--markers", help="Phase 5: add structural prefixes.")] = False,
+    seed: Annotated[int, typer.Option("--seed")] = 20260925,
+) -> None:
+    """Fine-tune the BIO token classifier on the synthetic corpus."""
+    from .train import Config, run
+
+    if not train_path.exists():
+        typer.secho(f"No {train_path}. Run `piiclf generate` first.", fg="red", err=True)
+        raise typer.Exit(2)
+
+    cfg = Config(
+        train_path=train_path,
+        val_path=val_path,
+        out_dir=out_dir,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr=lr,
+        max_length=max_length,
+        limit=limit or None,
+        val_limit=val_limit or None,
+        markers=markers,
+        seed=seed,
+    )
+    result = run(cfg, log=typer.echo)
+    typer.secho(f"\nBest macro-F1 (exact): {result['best_macro_f1_exact']:.3f}", fg="green")
+    typer.echo(f"Checkpoint + history: {out_dir}")
+
+
+@app.command("score-gold")
+def score_gold(
+    model_dir: Annotated[Path, typer.Option("--model")] = Path("checkpoints/bio-modernbert"),
+    gold_dir: Annotated[Path, typer.Option("--gold-dir")] = GOLD_ROOT,
+    corpus_root: Annotated[Path, typer.Option("--corpus-root")] = CORPUS_ROOT,
+    set_name: Annotated[str, typer.Option("--set")] = "eval",
+    survivors_only: Annotated[bool, typer.Option("--survivors-only",
+        help="Score only spans that survive the baseline's own suppression \u2014 "
+             "the only scope comparable to the structural-layer control.")] = False,
+) -> None:
+    """Score the trained model against the human-verified gold set."""
+    from .score_gold import render, score
+
+    gold = gold_dir / "gold.jsonl"
+    for path, what in ((gold, "gold set (run `piiclf label`)"), (model_dir, "model (run `piiclf train`)")):
+        if not path.exists():
+            typer.secho(f"Missing {path} \u2014 {what}", fg="red", err=True)
+            raise typer.Exit(2)
+
+    typer.echo("Scoring the model on human-verified real Go ...")
+    render(score(gold, corpus_root, set_name, model_dir, survivors_only, typer.echo), log=typer.echo)
 
 
 if __name__ == "__main__":
