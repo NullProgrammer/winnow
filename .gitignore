@@ -11,3 +11,4 @@ build/
 # lockfiles and the gold set must be, since they are the reproducibility record
 data/corpus/*
 data/synth
+checkpoints/
