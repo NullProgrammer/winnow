@@ -137,6 +137,38 @@ class TestDecodeSpans:
         got = decode_spans(offsets, labels)
         assert [g["label"] for g in got] == ["EMAIL", "NAME"]
 
+    def test_trims_leading_space_and_quotes(self):
+        """Measured impact: without trimming, EMAIL exact-F1 was 0.27 against
+        an overlap-F1 of 0.99 — the model found every email but the decoded
+        span began at ` "` because byte-level BPE folds those into the first
+        token."""
+        text = 'e := "yuki@hey.com"\n'
+        # A token range that includes the space, the opening quote, and the
+        # closing quote — what the tokenizer actually produces.
+        offsets = [(0, 0), (4, 6), (6, 18), (18, 19), (0, 0)]
+        labels = [
+            IGNORE_INDEX,
+            LABEL2ID["B-EMAIL"],
+            LABEL2ID["I-EMAIL"],
+            LABEL2ID["I-EMAIL"],
+            IGNORE_INDEX,
+        ]
+        untrimmed = decode_spans(offsets, labels)
+        assert text[untrimmed[0]["start"] : untrimmed[0]["end"]] == ' "yuki@hey.com"'
+
+        trimmed = decode_spans(offsets, labels, text)
+        assert text[trimmed[0]["start"] : trimmed[0]["end"]] == "yuki@hey.com"
+
+    def test_trimming_does_not_eat_a_clean_span(self):
+        text = "abc yuki@hey.com def"
+        offsets = [(4, 16)]
+        got = decode_spans(offsets, [LABEL2ID["B-EMAIL"]], text)
+        assert text[got[0]["start"] : got[0]["end"]] == "yuki@hey.com"
+
+    def test_all_delimiter_span_is_dropped(self):
+        got = decode_spans([(0, 3)], [LABEL2ID["B-EMAIL"]], '   ')
+        assert got == []
+
     def test_empty_input(self):
         assert decode_spans([], []) == []
 
